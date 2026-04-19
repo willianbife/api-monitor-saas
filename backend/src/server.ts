@@ -16,7 +16,11 @@ import { csrfProtection } from "./middlewares/csrf.middleware";
 import { errorHandler, notFoundHandler } from "./middlewares/error.middleware";
 import authRoutes from "./routes/auth.routes";
 import endpointRoutes from "./routes/endpoint.routes";
-import { syncQueueWithDatabase } from "./workers/monitor.worker";
+import {
+  getMonitorQueueStatus,
+  startMonitorWorker,
+  syncQueueWithDatabase,
+} from "./workers/monitor.worker";
 
 const app = express();
 const server = http.createServer(app);
@@ -114,4 +118,12 @@ app.use(errorHandler);
 server.listen(env.PORT, async () => {
   console.log(`Server running on http://localhost:${env.PORT}`);
   await syncQueueWithDatabase();
+  await startMonitorWorker();
+
+  const queueStatus = getMonitorQueueStatus();
+  if (!queueStatus.enabled || !queueStatus.available) {
+    console.warn(
+      `[Queue] Monitoring background worker unavailable: ${queueStatus.reason ?? "Unknown reason"}`
+    );
+  }
 });

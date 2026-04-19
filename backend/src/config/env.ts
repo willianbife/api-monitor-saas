@@ -7,6 +7,18 @@ const parseOrigins = (value: string) =>
     .filter(Boolean)
     .map((origin) => origin.replace(/\/$/, ""));
 
+const parseBoolean = (value: unknown) => {
+  if (typeof value === "boolean") {
+    return value;
+  }
+
+  if (typeof value === "string") {
+    return ["1", "true", "yes", "on"].includes(value.trim().toLowerCase());
+  }
+
+  return value;
+};
+
 const envSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   PORT: z.coerce.number().int().positive().default(4000),
@@ -14,6 +26,7 @@ const envSchema = z.object({
   REDIS_URL: z.string().min(1).default("redis://localhost:6379"),
   FRONTEND_URLS: z.string().optional(),
   FRONTEND_URL: z.string().optional(),
+  ENABLE_MONITOR_WORKER: z.preprocess(parseBoolean, z.boolean().optional()),
   JWT_SECRET_CURRENT: z
     .string()
     .min(32, "JWT_SECRET_CURRENT must be at least 32 characters"),
@@ -40,6 +53,8 @@ export const env = {
       )
     )
   ),
+  ENABLE_MONITOR_WORKER:
+    parsedEnv.data.ENABLE_MONITOR_WORKER ?? parsedEnv.data.NODE_ENV !== "production",
   JWT_SECRET_PREVIOUS: parsedEnv.data.JWT_SECRET_PREVIOUS || undefined,
 };
 

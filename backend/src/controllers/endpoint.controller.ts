@@ -2,9 +2,13 @@ import { Response } from "express";
 import { z } from "zod";
 import prisma from "../lib/prisma";
 import { AuthRequest } from "../middlewares/auth.middleware";
-import { monitorQueue } from "../workers/monitor.worker";
 import { HttpError } from "../utils/http-errors";
 import { sanitizePlainText } from "../utils/sanitize";
+import {
+  getMonitorQueueStatus,
+  removeEndpointMonitoring,
+  scheduleEndpointMonitoring,
+} from "../workers/monitor.worker";
 
 const createEndpointSchema = z
   .object({
@@ -59,6 +63,15 @@ export const createEndpoint = async (
     throw new HttpError(401, "Unauthorized");
   }
 
+  const queueStatus = getMonitorQueueStatus();
+  if (!queueStatus.enabled || !queueStatus.available) {
+    throw new HttpError(
+      503,
+      "Monitoring service is temporarily unavailable",
+      queueStatus.reason ? { reason: queueStatus.reason } : undefined
+    );
+  }
+
   const endpoint = await prisma.apiEndpoint.create({
     data: {
       name,
@@ -68,16 +81,12 @@ export const createEndpoint = async (
     },
   });
 
-  await monitorQueue.add(
-    "check-endpoint",
-    { endpointId: endpoint.id },
-    {
-      repeat: {
-        every: endpoint.interval * 1000,
-      },
-      jobId: `monitor_${endpoint.id}`,
-    }
-  );
+  try {
+    await scheduleEndpointMonitoring(endpoint.id, endpoint.interval);
+  } catch {
+    await prisma.apiEndpoint.delete({ where: { id: endpoint.id } });
+    throw new HttpError(503, "Monitoring service is temporarily unavailable");
+  }
 
   res.status(201).json({ endpoint });
 };
@@ -101,6 +110,8 @@ export const deleteEndpoint = async (
   if (!endpoint) {
     throw new HttpError(404, "Endpoint not found");
   }
+
+  await removeEndpointMonitoring(endpoint.id, endpoint.interval);
 
   await prisma.apiEndpoint.delete({
     where: { id: endpoint.id },
