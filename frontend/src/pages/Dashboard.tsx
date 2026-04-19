@@ -44,7 +44,7 @@ export const Dashboard: React.FC = () => {
     };
 
     fetchEndpoints();
-    const apiBaseUrl = import.meta.env.VITE_API_URL;
+
     const socketUrl = import.meta.env.VITE_API_URL.replace(/\/api$/, "");
     const newSocket = io(socketUrl);
     setSocket(newSocket);
