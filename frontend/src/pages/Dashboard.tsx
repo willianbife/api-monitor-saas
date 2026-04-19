@@ -1,5 +1,13 @@
 import React, { useEffect, useState } from "react";
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+} from "recharts";
 import api from "../services/api";
 import { io, Socket } from "socket.io-client";
 import { useAuth } from "../contexts/AuthContext";
@@ -9,7 +17,6 @@ interface Endpoint {
   name: string;
   url: string;
   interval: number;
-  status: "ACTIVE" | "PAUSED" | "ERROR";
 }
 
 interface EndpointUpdate {
@@ -43,10 +50,10 @@ export const Dashboard: React.FC = () => {
       }
     };
 
-    fetchEndpoints();
+    void fetchEndpoints();
 
     const socketUrl = import.meta.env.VITE_API_URL.replace(/\/api$/, "");
-    const newSocket = io(socketUrl);
+    const newSocket = io(socketUrl, { withCredentials: true });
     setSocket(newSocket);
 
     return () => {
@@ -55,40 +62,38 @@ export const Dashboard: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    if (!socket || endpoints.length === 0) return;
+    if (!socket) return;
 
-    endpoints.forEach((ep) => {
-      socket.on(`endpoint_update_${ep.id}`, (result: EndpointUpdate) => {
-        setLiveData((prev) => {
-          const current = prev[ep.id] || [];
-          const time = new Date(result.createdAt).toLocaleTimeString([], {
-            hour: "2-digit",
-            minute: "2-digit",
-            second: "2-digit",
-          });
-
-          const newData = [
-            ...current,
-            {
-              name: time,
-              latency: result.responseTime,
-              status: result.statusCode,
-            },
-          ];
-
-          if (newData.length > 20) newData.shift();
-
-          return { ...prev, [ep.id]: newData };
+    const handleEndpointUpdate = (result: EndpointUpdate) => {
+      setLiveData((prev) => {
+        const current = prev[result.endpointId] || [];
+        const time = new Date(result.createdAt).toLocaleTimeString([], {
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
         });
-      });
-    });
 
-    return () => {
-      endpoints.forEach((ep) => {
-        socket.off(`endpoint_update_${ep.id}`);
+        const newData = [
+          ...current,
+          {
+            name: time,
+            latency: result.responseTime,
+            status: result.statusCode,
+          },
+        ];
+
+        if (newData.length > 20) newData.shift();
+
+        return { ...prev, [result.endpointId]: newData };
       });
     };
-  }, [socket, endpoints]);
+
+    socket.on("endpoint_update", handleEndpointUpdate);
+
+    return () => {
+      socket.off("endpoint_update", handleEndpointUpdate);
+    };
+  }, [socket]);
 
   return (
     <div className="animate-fade-in">

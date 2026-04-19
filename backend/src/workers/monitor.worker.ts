@@ -1,10 +1,10 @@
 import { Queue, Worker } from "bullmq";
 import Redis from "ioredis";
-import "dotenv/config";
 import prisma from "../lib/prisma";
 import { checkEndpoint } from "../services/monitor.service";
+import { env } from "../config/env";
 
-const redisConnection = new Redis(process.env.REDIS_URL || "redis://localhost:6379", {
+const redisConnection = new Redis(env.REDIS_URL, {
   maxRetriesPerRequest: null,
 });
 
@@ -28,17 +28,14 @@ monitorWorker.on("failed", (job, err) => {
   console.error(`[Worker] Job failed for endpoint ${job?.data.endpointId}`, err);
 });
 
-// Function to synchronize database endpoints with the queue
 export const syncQueueWithDatabase = async () => {
   const endpoints = await prisma.apiEndpoint.findMany();
-  
-  // Clear existing repeatable jobs to avoid duplicates
+
   const repeatableJobs = await monitorQueue.getRepeatableJobs();
   for (const job of repeatableJobs) {
     await monitorQueue.removeRepeatableByKey(job.key);
   }
 
-  // Re-add all endpoints based on their interval
   for (const endpoint of endpoints) {
     await monitorQueue.add(
       "check-endpoint",

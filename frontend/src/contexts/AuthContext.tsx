@@ -1,5 +1,5 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import api from '../services/api';
+import React, { createContext, useContext, useEffect, useState } from "react";
+import api, { initializeCsrf } from "../services/api";
 
 interface User {
   id: string;
@@ -9,8 +9,8 @@ interface User {
 interface AuthContextType {
   user: User | null;
   loading: boolean;
-  login: (token: string, user: User) => void;
-  logout: () => void;
+  login: (user: User) => void;
+  logout: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType>({} as AuthContextType);
@@ -21,27 +21,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   useEffect(() => {
     const loadUser = async () => {
-      const token = localStorage.getItem('@ApiMonitor:token');
-      if (token) {
-        try {
-          const response = await api.get('/auth/me');
-          setUser(response.data.user);
-        } catch (error) {
-          localStorage.removeItem('@ApiMonitor:token');
-        }
+      try {
+        await initializeCsrf();
+        const response = await api.get("/auth/me");
+        setUser(response.data.user);
+      } catch {
+        setUser(null);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     };
-    loadUser();
+
+    void loadUser();
   }, []);
 
-  const login = (token: string, user: User) => {
-    localStorage.setItem('@ApiMonitor:token', token);
-    setUser(user);
+  const login = (nextUser: User) => {
+    setUser(nextUser);
   };
 
-  const logout = () => {
-    localStorage.removeItem('@ApiMonitor:token');
+  const logout = async () => {
+    await api.post("/auth/logout");
     setUser(null);
   };
 

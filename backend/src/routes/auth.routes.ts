@@ -1,11 +1,14 @@
 import { Router } from "express";
-import { register, login, me } from "../controllers/auth.controller";
+import { csrf, login, logout, me, register } from "../controllers/auth.controller";
+import { asyncHandler } from "../middlewares/async.middleware";
 import { requireAuth } from "../middlewares/auth.middleware";
 
 const router = Router();
 
-router.post("/register", register);
-router.post("/login", login);
-router.get("/me", requireAuth, me);
+router.get("/csrf", asyncHandler(csrf));
+router.post("/register", asyncHandler(register));
+router.post("/login", asyncHandler(login));
+router.post("/logout", requireAuth, asyncHandler(logout));
+router.get("/me", requireAuth, asyncHandler(me));
 
 export default router;

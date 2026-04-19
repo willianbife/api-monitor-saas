@@ -58,7 +58,7 @@ export const checkEndpoint = async (endpointId: string) => {
     },
   });
 
-  io.emit(`endpoint_update_${endpoint.id}`, result);
+  io.to(`user:${endpoint.userId}`).emit("endpoint_update", result);
 
   return result;
 };
