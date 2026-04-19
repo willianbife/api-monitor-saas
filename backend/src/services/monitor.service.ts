@@ -18,36 +18,35 @@ export const checkEndpoint = async (endpointId: string) => {
     if (!response.ok) {
       isError = true;
     }
-  } catch (error) {
+  } catch {
     isError = true;
   }
 
   const end = performance.now();
   const responseTime = Math.round(end - start);
 
-  // Anomaly Detection: Moving Average + Standard Deviation
   const pastResults = await prisma.apiCheckResult.findMany({
     where: { endpointId: endpoint.id },
     orderBy: { createdAt: "desc" },
-    take: 100, // Last 100 checks for moving average
+    take: 100,
   });
 
   let isAnomaly = false;
 
   if (pastResults.length >= 10 && !isError) {
-    const times = pastResults.map((r) => r.responseTime);
-    const mean = times.reduce((a, b) => a + b, 0) / times.length;
-    
-    const squaredDiffs = times.map((t) => Math.pow(t - mean, 2));
-    const variance = squaredDiffs.reduce((a, b) => a + b, 0) / times.length;
+    const times = pastResults.map((r: { responseTime: number }) => r.responseTime);
+    const mean = times.reduce((a: number, b: number) => a + b, 0) / times.length;
+
+    const squaredDiffs = times.map((t: number) => Math.pow(t - mean, 2));
+    const variance =
+      squaredDiffs.reduce((a: number, b: number) => a + b, 0) / times.length;
     const stdDev = Math.sqrt(variance);
 
-    // If current response time is > mean + 2 * stdDev, it's an anomaly (latency spike)
     if (responseTime > mean + 2 * stdDev) {
       isAnomaly = true;
     }
   } else if (isError) {
-    isAnomaly = true; // Complete failures are anomalies
+    isAnomaly = true;
   }
 
   const result = await prisma.apiCheckResult.create({
@@ -59,7 +58,6 @@ export const checkEndpoint = async (endpointId: string) => {
     },
   });
 
-  // Emit real-time update
   io.emit(`endpoint_update_${endpoint.id}`, result);
 
   return result;
