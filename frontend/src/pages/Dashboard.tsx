@@ -4,10 +4,33 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import api from '../services/api';
 import { io, Socket } from 'socket.io-client';
 
+interface Endpoint {
+  id: string;
+  name: string;
+  url: string;
+  interval: number;
+  status: 'ACTIVE' | 'PAUSED' | 'ERROR';
+}
+
+interface EndpointUpdate {
+  id: string;
+  endpointId: string;
+  statusCode: number | null;
+  responseTime: number;
+  isAnomaly: boolean;
+  createdAt: string;
+}
+
+interface ChartPoint {
+  name: string;
+  latency: number;
+  status: number | null;
+}
+
 export const Dashboard: React.FC = () => {
   const { user } = useAuth();
-  const [endpoints, setEndpoints] = useState<any[]>([]);
-  const [liveData, setLiveData] = useState<Record<string, any[]>>({});
+  const [endpoints, setEndpoints] = useState<Endpoint[]>([]);
+  const [liveData, setLiveData] = useState<Record<string, ChartPoint[]>>({});
   const [socket, setSocket] = useState<Socket | null>(null);
 
   useEffect(() => {
@@ -21,7 +44,8 @@ export const Dashboard: React.FC = () => {
     };
     fetchEndpoints();
 
-    const newSocket = io('http://localhost:4000');
+    const socketUrl = import.meta.env.VITE_API_URL.replace('/api', '');
+    const newSocket = io(socketUrl);
     setSocket(newSocket);
 
     return () => {
@@ -33,7 +57,7 @@ export const Dashboard: React.FC = () => {
     if (!socket || endpoints.length === 0) return;
 
     endpoints.forEach(ep => {
-      socket.on(`endpoint_update_${ep.id}`, (result) => {
+      socket.on(`endpoint_update_${ep.id}`, (result: EndpointUpdate) => {
         setLiveData(prev => {
           const current = prev[ep.id] || [];
           const time = new Date(result.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
