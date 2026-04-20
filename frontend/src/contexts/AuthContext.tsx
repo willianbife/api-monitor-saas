@@ -23,8 +23,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const loadUser = async () => {
       try {
         await initializeCsrf();
-        const response = await api.get("/auth/me");
-        setUser(response.data.user);
+        const response = await api.get("/auth/session");
+        setUser(response.data.authenticated ? response.data.user : null);
       } catch {
         setUser(null);
       } finally {

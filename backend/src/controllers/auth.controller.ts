@@ -9,8 +9,9 @@ import {
 import { generateToken } from "../utils/jwt";
 import { sanitizePlainText } from "../utils/sanitize";
 import { HttpError } from "../utils/http-errors";
-import { AuthRequest } from "../middlewares/auth.middleware";
+import { AuthRequest, extractSessionToken } from "../middlewares/auth.middleware";
 import { generateSignedCsrfToken } from "../utils/csrf";
+import { verifyToken } from "../utils/jwt";
 
 const registerSchema = z
   .object({
@@ -104,6 +105,48 @@ export const me = async (req: AuthRequest, res: Response): Promise<void> => {
   const csrfToken = generateSignedCsrfToken();
 
   res.json({ user, csrfToken });
+};
+
+export const session = async (req: Request, res: Response): Promise<void> => {
+  const token = extractSessionToken(req);
+
+  if (!token) {
+    res.status(200).json({
+      authenticated: false,
+      user: null,
+      csrfToken: generateSignedCsrfToken(),
+    });
+    return;
+  }
+
+  try {
+    const { userId } = verifyToken(token);
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, email: true, createdAt: true },
+    });
+
+    if (!user) {
+      res.status(200).json({
+        authenticated: false,
+        user: null,
+        csrfToken: generateSignedCsrfToken(),
+      });
+      return;
+    }
+
+    res.status(200).json({
+      authenticated: true,
+      user,
+      csrfToken: generateSignedCsrfToken(),
+    });
+  } catch {
+    res.status(200).json({
+      authenticated: false,
+      user: null,
+      csrfToken: generateSignedCsrfToken(),
+    });
+  }
 };
 
 export const csrf = async (_req: Request, res: Response): Promise<void> => {
