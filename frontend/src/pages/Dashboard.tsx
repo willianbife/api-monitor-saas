@@ -17,6 +17,13 @@ interface Endpoint {
   name: string;
   url: string;
   interval: number;
+  results?: EndpointUpdate[];
+}
+
+interface MonitoringStatus {
+  enabled: boolean;
+  available: boolean;
+  reason?: string | null;
 }
 
 interface EndpointUpdate {
@@ -39,12 +46,37 @@ export const Dashboard: React.FC = () => {
   const [endpoints, setEndpoints] = useState<Endpoint[]>([]);
   const [liveData, setLiveData] = useState<Record<string, ChartPoint[]>>({});
   const [socket, setSocket] = useState<Socket | null>(null);
+  const [monitoringStatus, setMonitoringStatus] = useState<MonitoringStatus | null>(null);
 
   useEffect(() => {
     const fetchEndpoints = async () => {
       try {
         const response = await api.get("/endpoints");
         setEndpoints(response.data.endpoints);
+        setMonitoringStatus(response.data.monitoring ?? null);
+        setLiveData(
+          response.data.endpoints.reduce(
+            (acc: Record<string, ChartPoint[]>, endpoint: Endpoint) => {
+              const points =
+                endpoint.results
+                  ?.slice()
+                  .reverse()
+                  .map((result) => ({
+                    name: new Date(result.createdAt).toLocaleTimeString([], {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                      second: "2-digit",
+                    }),
+                    latency: result.responseTime,
+                    status: result.statusCode,
+                  })) ?? [];
+
+              acc[endpoint.id] = points;
+              return acc;
+            },
+            {}
+          )
+        );
       } catch (err) {
         console.error("Failed to fetch endpoints", err);
       }
@@ -130,6 +162,23 @@ export const Dashboard: React.FC = () => {
         </div>
       </div>
 
+      {monitoringStatus && (!monitoringStatus.enabled || !monitoringStatus.available) && (
+        <div
+          className="card"
+          style={{
+            marginTop: "24px",
+            borderColor: "var(--warning)",
+            backgroundColor: "rgba(245, 158, 11, 0.08)",
+          }}
+        >
+          <h3 style={{ marginBottom: "8px" }}>Monitoring paused</h3>
+          <p style={{ color: "var(--text-secondary)" }}>
+            Live checks are currently unavailable.
+            {monitoringStatus.reason ? ` Reason: ${monitoringStatus.reason}.` : ""}
+          </p>
+        </div>
+      )}
+
       {endpoints.map((ep) => {
         const data = liveData[ep.id] || [];
 
@@ -155,7 +204,9 @@ export const Dashboard: React.FC = () => {
                   color: "var(--text-muted)",
                 }}
               >
-                Waiting for next check...
+                {monitoringStatus && (!monitoringStatus.enabled || !monitoringStatus.available)
+                  ? "Monitoring is temporarily unavailable."
+                  : "Waiting for next check..."}
               </div>
             ) : (
               <div style={{ height: "300px" }}>

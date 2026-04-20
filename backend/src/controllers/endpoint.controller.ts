@@ -40,17 +40,26 @@ export const listEndpoints = async (
   const endpoints = await prisma.apiEndpoint.findMany({
     where: { userId: req.userId },
     orderBy: { createdAt: "desc" },
-    select: {
-      id: true,
-      name: true,
-      url: true,
-      interval: true,
-      createdAt: true,
-      updatedAt: true,
+    include: {
+      results: {
+        orderBy: { createdAt: "desc" },
+        take: 20,
+        select: {
+          id: true,
+          endpointId: true,
+          statusCode: true,
+          responseTime: true,
+          isAnomaly: true,
+          createdAt: true,
+        },
+      },
     },
   });
 
-  res.json({ endpoints });
+  res.json({
+    endpoints,
+    monitoring: getMonitorQueueStatus(),
+  });
 };
 
 export const createEndpoint = async (
