@@ -45,6 +45,7 @@ export const Dashboard: React.FC = () => {
   const [endpoints, setEndpoints] = useState<Endpoint[]>([]);
   const [loading, setLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [, setClockTick] = useState(0);
   const socketRef = useRef<Socket | null>(null);
   const [historyFilter, setHistoryFilter] = useState<HistoryFilter>("all");
   const [historyPage, setHistoryPage] = useState(1);
@@ -88,7 +89,10 @@ export const Dashboard: React.FC = () => {
       });
 
     const socketUrl = import.meta.env.VITE_API_URL.replace(/\/api$/, "");
-    const newSocket = io(socketUrl);
+    const newSocket = io(socketUrl, {
+      withCredentials: true,
+      transports: ["websocket", "polling"],
+    });
     socketRef.current = newSocket;
 
     return () => {
@@ -109,27 +113,41 @@ export const Dashboard: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    const socket = socketRef.current;
-    if (!socket || endpoints.length === 0) return;
-
-    endpoints.forEach((endpoint) => {
-      socket.on(`endpoint_update_${endpoint.id}`, (result: EndpointUpdate) => {
-        setEndpoints((current) =>
-          current.map((item) =>
-            item.id === endpoint.id
-              ? { ...item, results: [result, ...item.results].slice(0, 20) }
-              : item
-          )
-        );
-      });
-    });
+    const clockId = window.setInterval(() => {
+      setClockTick((value) => value + 1);
+    }, 30000);
 
     return () => {
-      endpoints.forEach((endpoint) => {
-        socket.off(`endpoint_update_${endpoint.id}`);
-      });
+      window.clearInterval(clockId);
     };
-  }, [endpoints]);
+  }, []);
+
+  useEffect(() => {
+    const socket = socketRef.current;
+    if (!socket) return;
+
+    const handleEndpointUpdate = (result: EndpointUpdate) => {
+      setEndpoints((current) =>
+        current.map((item) =>
+          item.id === result.endpointId
+            ? { ...item, results: [result, ...item.results].slice(0, 20) }
+            : item
+        )
+      );
+    };
+
+    const handleSocketError = (error: Error) => {
+      console.error("Socket connection failed", error.message);
+    };
+
+    socket.on("endpoint_update", handleEndpointUpdate);
+    socket.on("connect_error", handleSocketError);
+
+    return () => {
+      socket.off("endpoint_update", handleEndpointUpdate);
+      socket.off("connect_error", handleSocketError);
+    };
+  }, []);
 
   const latestResults = useMemo(() => getAllResults(endpoints), [endpoints]);
   const primaryEndpoint = endpoints[0] || null;
