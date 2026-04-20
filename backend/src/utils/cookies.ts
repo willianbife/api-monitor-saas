@@ -1,7 +1,7 @@
 import { Request, Response } from "express";
 import crypto from "crypto";
-import { sessionCookieName } from "../config/security";
-import { isProduction } from "../config/env";
+import { refreshCookieName, sessionCookieName } from "../config/security";
+import { env, isProduction } from "../config/env";
 
 const baseCookieOptions = {
   path: "/",
@@ -46,12 +46,29 @@ export const setSessionCookie = (res: Response, token: string) => {
     ...baseCookieOptions,
     httpOnly: true,
     sameSite: isProduction ? "none" : "lax",
-    maxAge: 1000 * 60 * 60 * 8,
+    maxAge: 1000 * 60 * env.ACCESS_TOKEN_TTL_MINUTES,
+  });
+};
+
+export const setRefreshCookie = (res: Response, token: string) => {
+  res.cookie(refreshCookieName, token, {
+    ...baseCookieOptions,
+    httpOnly: true,
+    sameSite: isProduction ? "none" : "lax",
+    maxAge: 1000 * 60 * 60 * 24 * env.REFRESH_TOKEN_TTL_DAYS,
   });
 };
 
 export const clearSessionCookie = (res: Response) => {
   res.clearCookie(sessionCookieName, {
+    ...baseCookieOptions,
+    httpOnly: true,
+    sameSite: isProduction ? "none" : "lax",
+  });
+};
+
+export const clearRefreshCookie = (res: Response) => {
+  res.clearCookie(refreshCookieName, {
     ...baseCookieOptions,
     httpOnly: true,
     sameSite: isProduction ? "none" : "lax",

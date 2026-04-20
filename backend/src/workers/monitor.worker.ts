@@ -81,6 +81,13 @@ export const scheduleEndpointMonitoring = async (endpointId: string, interval: n
       "check-endpoint",
       { endpointId },
       {
+        attempts: 5,
+        backoff: {
+          type: "exponential",
+          delay: 5000,
+        },
+        removeOnComplete: 200,
+        removeOnFail: 500,
         repeat: {
           every: interval * 1000,
         },

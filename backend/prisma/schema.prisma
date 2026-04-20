@@ -6,36 +6,465 @@ datasource db {
   provider = "postgresql"
 }
 
+enum WorkspacePlan {
+  FREE
+  PRO
+  ENTERPRISE
+}
+
+enum BillingStatus {
+  INACTIVE
+  TRIALING
+  ACTIVE
+  PAST_DUE
+  CANCELED
+}
+
+enum WorkspaceRole {
+  OWNER
+  ADMIN
+  VIEWER
+}
+
+enum EndpointMethod {
+  GET
+  POST
+  PUT
+  DELETE
+}
+
+enum CheckRegion {
+  PRIMARY
+  US_EAST
+  US_WEST
+  EU_CENTRAL
+  SA_EAST
+}
+
+enum CheckState {
+  HEALTHY
+  DEGRADED
+  DOWN
+}
+
+enum IncidentStatus {
+  OPEN
+  INVESTIGATING
+  MONITORING
+  RESOLVED
+}
+
+enum IncidentSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum IncidentVisibility {
+  INTERNAL
+  PUBLIC
+}
+
+enum AlertChannelType {
+  EMAIL
+  DISCORD
+  TELEGRAM
+  WHATSAPP
+}
+
+enum AlertEventType {
+  FAILURE
+  RECOVERY
+  INCIDENT_OPENED
+  INCIDENT_RESOLVED
+}
+
+enum DeliveryStatus {
+  PENDING
+  SENT
+  FAILED
+  SKIPPED
+}
+
+enum AuditAction {
+  USER_REGISTERED
+  USER_LOGGED_IN
+  USER_LOGGED_OUT
+  PASSWORD_RESET_REQUESTED
+  PASSWORD_RESET_COMPLETED
+  EMAIL_VERIFICATION_REQUESTED
+  EMAIL_VERIFIED
+  WORKSPACE_CREATED
+  WORKSPACE_MEMBER_INVITED
+  WORKSPACE_MEMBER_ROLE_UPDATED
+  ENDPOINT_CREATED
+  ENDPOINT_UPDATED
+  ENDPOINT_DELETED
+  ALERT_CHANNEL_CREATED
+  ALERT_CHANNEL_UPDATED
+  ALERT_CHANNEL_DELETED
+  INCIDENT_CREATED
+  INCIDENT_UPDATED
+  INCIDENT_RESOLVED
+  BILLING_UPDATED
+}
+
+enum UsageMetricType {
+  ENDPOINTS
+  CHECKS
+  INCIDENTS
+  ALERTS
+}
+
 model User {
-  id        String   @id @default(uuid())
-  email     String   @unique
-  password  String
-  createdAt DateTime @default(now())
-  endpoints ApiEndpoint[]
+  id                String                  @id @default(uuid())
+  email             String                  @unique
+  password          String
+  emailVerifiedAt   DateTime?
+  defaultWorkspaceId String?
+  createdAt         DateTime                @default(now())
+  updatedAt         DateTime                @updatedAt
+
+  defaultWorkspace  Workspace?              @relation("UserDefaultWorkspace", fields: [defaultWorkspaceId], references: [id], onDelete: SetNull)
+  memberships       WorkspaceMembership[]
+  createdWorkspaces Workspace[]             @relation("WorkspaceCreatedBy")
+  endpoints         ApiEndpoint[]
+  refreshTokens     RefreshToken[]
+  passwordResets    PasswordResetToken[]
+  emailVerifications EmailVerificationToken[]
+  invitedWorkspaces WorkspaceInvitation[]   @relation("InvitationInvitedBy")
+  incidentNotes     IncidentNote[]
+  createdIncidents  Incident[]              @relation("IncidentCreatedBy")
+  auditLogs         AuditLog[]
+}
+
+model Workspace {
+  id                   String                  @id @default(uuid())
+  name                 String
+  slug                 String                  @unique
+  plan                 WorkspacePlan           @default(FREE)
+  billingStatus        BillingStatus           @default(INACTIVE)
+  stripeCustomerId     String?                 @unique
+  stripeSubscriptionId String?                 @unique
+  trialEndsAt          DateTime?
+  statusPageTitle      String?
+  statusPageDescription String?
+  publicStatusEnabled  Boolean                 @default(false)
+  publicStatusSlug     String?                 @unique
+  createdById          String
+  createdAt            DateTime                @default(now())
+  updatedAt            DateTime                @updatedAt
+
+  createdBy            User                    @relation("WorkspaceCreatedBy", fields: [createdById], references: [id], onDelete: Cascade)
+  defaultForUsers      User[]                  @relation("UserDefaultWorkspace")
+  memberships          WorkspaceMembership[]
+  invitations          WorkspaceInvitation[]
+  endpoints            ApiEndpoint[]
+  incidents            Incident[]
+  alertChannels        AlertChannel[]
+  statusPage           StatusPage?
+  auditLogs            AuditLog[]
+  usageRecords         UsageRecord[]
+
+  @@index([createdById])
+}
+
+model WorkspaceMembership {
+  id          String        @id @default(uuid())
+  workspaceId String
+  userId      String
+  role        WorkspaceRole @default(VIEWER)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  workspace   Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, userId])
+  @@index([userId])
+}
+
+model WorkspaceInvitation {
+  id           String        @id @default(uuid())
+  workspaceId   String
+  email         String
+  role          WorkspaceRole
+  tokenHash     String       @unique
+  invitedById   String
+  expiresAt     DateTime
+  acceptedAt    DateTime?
+  createdAt     DateTime     @default(now())
+
+  workspace     Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  invitedBy     User         @relation("InvitationInvitedBy", fields: [invitedById], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, email])
+}
+
+model RefreshToken {
+  id          String   @id @default(uuid())
+  userId      String
+  tokenHash   String   @unique
+  userAgent   String?
+  ipAddress   String?
+  expiresAt   DateTime
+  lastUsedAt  DateTime?
+  revokedAt   DateTime?
+  createdAt   DateTime @default(now())
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+}
+
+model PasswordResetToken {
+  id         String   @id @default(uuid())
+  userId      String
+  tokenHash   String   @unique
+  expiresAt   DateTime
+  usedAt      DateTime?
+  createdAt   DateTime @default(now())
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+}
+
+model EmailVerificationToken {
+  id         String   @id @default(uuid())
+  userId      String
+  tokenHash   String   @unique
+  expiresAt   DateTime
+  usedAt      DateTime?
+  createdAt   DateTime @default(now())
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
 }
 
 model ApiEndpoint {
-  id        String   @id @default(uuid())
-  userId    String
-  name      String
-  url       String
-  interval  Int      @default(60) // Interval in seconds
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id                    String        @id @default(uuid())
+  workspaceId            String
+  userId                String
+  name                  String
+  url                   String
+  method                EndpointMethod @default(GET)
+  interval              Int           @default(60)
+  timeoutMs             Int           @default(10000)
+  retries               Int           @default(2)
+  isActive              Boolean       @default(true)
+  isPublic              Boolean       @default(false)
+  requestHeadersEncrypted String?
+  requestBodyEncrypted  String?
+  responseValidation    Json?
+  regions               Json?
+  alertCooldownSeconds  Int           @default(300)
+  currentState          CheckState    @default(HEALTHY)
+  lastCheckedAt         DateTime?
+  lastHealthyAt         DateTime?
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
 
-  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  results   ApiCheckResult[]
+  workspace             Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user                  User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  results               ApiCheckResult[]
+  incidents             Incident[]
+  alertChannels         AlertChannel[]
+  alertDeliveries       AlertDelivery[]
+  publicListings        StatusPageEndpoint[]
+  availabilityWindows   EndpointAvailabilityWindow[]
+
+  @@index([workspaceId, createdAt])
+  @@index([workspaceId, currentState])
+  @@index([userId, createdAt])
 }
 
 model ApiCheckResult {
-  id           String   @id @default(uuid())
-  endpointId   String
-  statusCode   Int?
-  responseTime Int      // in milliseconds
-  isAnomaly    Boolean  @default(false)
-  createdAt    DateTime @default(now())
+  id               String      @id @default(uuid())
+  endpointId       String
+  region           CheckRegion @default(PRIMARY)
+  statusCode       Int?
+  responseTime     Int
+  totalResponseMs  Int?
+  dnsLookupMs      Int?
+  tlsHandshakeMs   Int?
+  attemptCount     Int         @default(1)
+  failureReason    String?
+  responseSnippet  String?
+  validationPassed Boolean     @default(true)
+  isAnomaly        Boolean     @default(false)
+  state            CheckState  @default(HEALTHY)
+  createdAt        DateTime    @default(now())
 
-  endpoint     ApiEndpoint @relation(fields: [endpointId], references: [id], onDelete: Cascade)
-  
+  endpoint         ApiEndpoint @relation(fields: [endpointId], references: [id], onDelete: Cascade)
+
   @@index([endpointId, createdAt])
+  @@index([endpointId, state, createdAt])
+  @@index([region, createdAt])
+}
+
+model EndpointAvailabilityWindow {
+  id               String      @id @default(uuid())
+  endpointId       String
+  region           CheckRegion @default(PRIMARY)
+  windowKey        String
+  windowStart      DateTime
+  windowEnd        DateTime
+  uptimePercentage Float
+  healthyChecks    Int         @default(0)
+  degradedChecks   Int         @default(0)
+  downChecks       Int         @default(0)
+  totalChecks      Int         @default(0)
+  updatedAt        DateTime    @updatedAt
+
+  endpoint         ApiEndpoint @relation(fields: [endpointId], references: [id], onDelete: Cascade)
+
+  @@unique([endpointId, region, windowKey])
+  @@index([endpointId, windowStart])
+}
+
+model Incident {
+  id             String             @id @default(uuid())
+  workspaceId     String
+  endpointId      String?
+  createdById     String?
+  title           String
+  summary         String?
+  status          IncidentStatus    @default(OPEN)
+  severity        IncidentSeverity  @default(MEDIUM)
+  visibility      IncidentVisibility @default(INTERNAL)
+  startedAt       DateTime          @default(now())
+  lastDetectedAt  DateTime?
+  resolvedAt      DateTime?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  workspace       Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  endpoint        ApiEndpoint?      @relation(fields: [endpointId], references: [id], onDelete: SetNull)
+  createdBy       User?             @relation("IncidentCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  notes           IncidentNote[]
+  alertDeliveries AlertDelivery[]
+
+  @@index([workspaceId, status])
+  @@index([endpointId, status])
+}
+
+model IncidentNote {
+  id          String             @id @default(uuid())
+  incidentId   String
+  userId       String?
+  body         String
+  visibility   IncidentVisibility @default(INTERNAL)
+  createdAt    DateTime           @default(now())
+
+  incident     Incident            @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  user         User?               @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([incidentId, createdAt])
+}
+
+model AlertChannel {
+  id                String           @id @default(uuid())
+  workspaceId        String
+  endpointId         String?
+  name               String
+  type               AlertChannelType
+  isEnabled          Boolean          @default(true)
+  target             String
+  configEncrypted    String?
+  cooldownSeconds    Int              @default(300)
+  lastTriggeredAt    DateTime?
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+
+  workspace          Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  endpoint           ApiEndpoint?     @relation(fields: [endpointId], references: [id], onDelete: Cascade)
+  deliveries         AlertDelivery[]
+
+  @@index([workspaceId, isEnabled])
+  @@index([endpointId, isEnabled])
+}
+
+model AlertDelivery {
+  id             String         @id @default(uuid())
+  channelId       String
+  endpointId      String?
+  incidentId      String?
+  eventType       AlertEventType
+  dedupeKey       String
+  status          DeliveryStatus @default(PENDING)
+  errorMessage    String?
+  payload         Json?
+  sentAt          DateTime?
+  createdAt       DateTime       @default(now())
+
+  channel         AlertChannel   @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  endpoint        ApiEndpoint?   @relation(fields: [endpointId], references: [id], onDelete: SetNull)
+  incident        Incident?      @relation(fields: [incidentId], references: [id], onDelete: SetNull)
+
+  @@unique([channelId, dedupeKey])
+  @@index([endpointId, createdAt])
+}
+
+model StatusPage {
+  id            String              @id @default(uuid())
+  workspaceId    String              @unique
+  slug           String              @unique
+  title          String
+  description    String?
+  isPublic       Boolean             @default(false)
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+
+  workspace      Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  endpoints      StatusPageEndpoint[]
+}
+
+model StatusPageEndpoint {
+  id            String      @id @default(uuid())
+  statusPageId   String
+  endpointId     String
+  sortOrder      Int         @default(0)
+  isVisible      Boolean     @default(true)
+
+  statusPage     StatusPage  @relation(fields: [statusPageId], references: [id], onDelete: Cascade)
+  endpoint       ApiEndpoint @relation(fields: [endpointId], references: [id], onDelete: Cascade)
+
+  @@unique([statusPageId, endpointId])
+  @@index([statusPageId, sortOrder])
+}
+
+model UsageRecord {
+  id            String          @id @default(uuid())
+  workspaceId     String
+  monthStart      DateTime
+  metric          UsageMetricType
+  quantity        Int             @default(0)
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  workspace       Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, monthStart, metric])
+  @@index([workspaceId, monthStart])
+}
+
+model AuditLog {
+  id            String       @id @default(uuid())
+  workspaceId     String?
+  userId          String?
+  action          AuditAction
+  targetType      String
+  targetId        String?
+  metadata        Json?
+  createdAt       DateTime    @default(now())
+
+  workspace       Workspace?  @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+  user            User?       @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId, createdAt])
+  @@index([userId, createdAt])
+  @@index([action, createdAt])
 }

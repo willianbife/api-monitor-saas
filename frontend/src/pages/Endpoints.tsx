@@ -28,7 +28,9 @@ export const Endpoints: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [name, setName] = useState("");
   const [url, setUrl] = useState("");
+  const [method, setMethod] = useState<"GET" | "POST" | "PUT" | "DELETE">("GET");
   const [interval, setInterval] = useState(60);
+  const [isPublic, setIsPublic] = useState(false);
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -74,11 +76,19 @@ export const Endpoints: React.FC = () => {
     setIsSubmitting(true);
 
     try {
-      await api.post("/endpoints", { name, url, interval: Number(interval) });
+      await api.post("/endpoints", {
+        name,
+        url,
+        method,
+        interval: Number(interval),
+        isPublic,
+      });
       setIsModalOpen(false);
       setName("");
       setUrl("");
+      setMethod("GET");
       setInterval(60);
+      setIsPublic(false);
       await fetchEndpoints();
       emitToast({
         kind: "success",
@@ -132,27 +142,38 @@ export const Endpoints: React.FC = () => {
       {loading ? (
         <EndpointsSkeleton />
       ) : endpoints.length === 0 ? (
-        <EmptyState
-          title="No endpoints in this workspace"
-          description="Create a monitor to unlock real-time charts, error history and anomaly insights."
-          action={
-            <button className="btn btn-primary" onClick={() => setIsModalOpen(true)}>
-              <Plus size={16} /> Add your first endpoint
-            </button>
-          }
-          illustration={
-            <svg width="130" height="92" viewBox="0 0 130 92" fill="none">
-              <rect x="8" y="10" width="114" height="72" rx="18" fill="var(--empty-illustration-bg)" />
-              <path
-                d="M34 54h18l8-20 11 28 13-16 12 8"
-                stroke="var(--primary)"
-                strokeWidth="6"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
-          }
-        />
+        <div style={{ display: "grid", gap: "20px" }}>
+          <EmptyState
+            title="No endpoints in this workspace"
+            description="Create a monitor to unlock real-time charts, error history and anomaly insights."
+            action={
+              <button className="btn btn-primary" onClick={() => setIsModalOpen(true)}>
+                <Plus size={16} /> Add your first endpoint
+              </button>
+            }
+            illustration={
+              <svg width="130" height="92" viewBox="0 0 130 92" fill="none">
+                <rect x="8" y="10" width="114" height="72" rx="18" fill="var(--empty-illustration-bg)" />
+                <path
+                  d="M34 54h18l8-20 11 28 13-16 12 8"
+                  stroke="var(--primary)"
+                  strokeWidth="6"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            }
+          />
+          <div className="card">
+            <h3 style={{ marginBottom: "12px" }}>First endpoint onboarding</h3>
+            <div className="endpoint-overview-meta" style={{ display: "grid", gap: "8px" }}>
+              <span>1. Create your first endpoint with the correct URL and interval.</span>
+              <span>2. Choose the HTTP method and validation rules as needed.</span>
+              <span>3. Configure an alert channel so failures and recoveries are delivered.</span>
+              <span>4. Publish a public status page when you are ready to expose uptime.</span>
+            </div>
+          </div>
+        </div>
       ) : (
         <div style={{ display: "grid", gap: "16px" }}>
           {endpoints.map((ep) => (
@@ -189,11 +210,12 @@ export const Endpoints: React.FC = () => {
                   }}
                 >
                   <span style={{ display: "flex", alignItems: "center", gap: "4px" }}>
-                    <Clock size={14} /> Interval: {ep.interval}s
+                    <Clock size={14} /> {ep.method || "GET"} every {ep.interval}s
                   </span>
                   <span style={{ display: "flex", alignItems: "center", gap: "4px" }}>
                     <DatabaseZap size={14} /> Last check: {getRelativeTimestamp(ep.results[0]?.createdAt || null)}
                   </span>
+                  {ep.isPublic ? <span>Visible on status page</span> : null}
                 </div>
               </div>
               <div>
@@ -269,6 +291,21 @@ export const Endpoints: React.FC = () => {
                 />
               </div>
               <div className="form-group">
+                <label className="form-label">HTTP Method</label>
+                <select
+                  className="form-input"
+                  value={method}
+                  onChange={(e) =>
+                    setMethod(e.target.value as "GET" | "POST" | "PUT" | "DELETE")
+                  }
+                >
+                  <option value="GET">GET</option>
+                  <option value="POST">POST</option>
+                  <option value="PUT">PUT</option>
+                  <option value="DELETE">DELETE</option>
+                </select>
+              </div>
+              <div className="form-group">
                 <label className="form-label">Check Interval (seconds)</label>
                 <input
                   className="form-input"
@@ -280,6 +317,22 @@ export const Endpoints: React.FC = () => {
                   required
                 />
               </div>
+              <label
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "10px",
+                  color: "var(--text-secondary)",
+                  marginTop: "4px",
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={isPublic}
+                  onChange={(e) => setIsPublic(e.target.checked)}
+                />
+                Show this endpoint on the public status page
+              </label>
 
               <div style={{ display: "flex", gap: "12px", marginTop: "32px" }}>
                 <button

@@ -11,6 +11,11 @@ const normalizeOrigin = (value: string) => {
 };
 
 export const csrfProtection = (req: Request, res: Response, next: NextFunction): void => {
+  if (req.path === "/billing/stripe/webhook") {
+    next();
+    return;
+  }
+
   if (safeMethods.has(req.method)) {
     next();
     return;

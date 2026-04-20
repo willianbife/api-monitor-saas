@@ -16,11 +16,18 @@ import { csrfProtection } from "./middlewares/csrf.middleware";
 import { errorHandler, notFoundHandler } from "./middlewares/error.middleware";
 import authRoutes from "./routes/auth.routes";
 import endpointRoutes from "./routes/endpoint.routes";
+import workspaceRoutes from "./routes/workspace.routes";
+import incidentRoutes from "./routes/incident.routes";
+import alertRoutes from "./routes/alert.routes";
+import statusPageRoutes from "./routes/status-page.routes";
+import opsRoutes from "./routes/ops.routes";
+import billingRoutes from "./routes/billing.routes";
 import {
   getMonitorQueueStatus,
   startMonitorWorker,
   syncQueueWithDatabase,
 } from "./workers/monitor.worker";
+import { logger } from "./utils/logger";
 
 const app = express();
 const server = http.createServer(app);
@@ -100,13 +107,40 @@ const writeLimiter = rateLimit({
   message: { error: "Too many write requests" },
 });
 
+const recoveryLimiter = rateLimit({
+  windowMs: 30 * 60 * 1000,
+  max: 10,
+  skipSuccessfulRequests: false,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many recovery requests" },
+});
+
+const webhookLimiter = rateLimit({
+  windowMs: 5 * 60 * 1000,
+  max: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many webhook requests" },
+});
+
 app.use("/api", apiLimiter);
 app.use("/api/auth/login", authLimiter);
 app.use("/api/auth/register", authLimiter);
+app.use("/api/auth/password-reset", recoveryLimiter);
+app.use("/api/auth/refresh", authLimiter);
+app.use("/api/workspaces/invite", writeLimiter);
+app.use("/api/billing/stripe/webhook", webhookLimiter);
 app.use("/api", csrfProtection);
 app.use("/api/endpoints", writeLimiter);
 app.use("/api/auth", authRoutes);
 app.use("/api/endpoints", endpointRoutes);
+app.use("/api/workspaces", workspaceRoutes);
+app.use("/api/incidents", incidentRoutes);
+app.use("/api/alerts", alertRoutes);
+app.use("/api/status-pages", statusPageRoutes);
+app.use("/api/billing", billingRoutes);
+app.use("/ops", opsRoutes);
 
 app.get("/health", (_req, res) => {
   res.json({ status: "ok", timestamp: new Date().toISOString() });
@@ -116,14 +150,17 @@ app.use(notFoundHandler);
 app.use(errorHandler);
 
 server.listen(env.PORT, async () => {
-  console.log(`Server running on http://localhost:${env.PORT}`);
+  logger.info("API server started", { port: env.PORT });
   await syncQueueWithDatabase();
-  await startMonitorWorker();
+
+  if (env.EMBEDDED_WORKER) {
+    await startMonitorWorker();
+  }
 
   const queueStatus = getMonitorQueueStatus();
   if (!queueStatus.enabled || !queueStatus.available) {
-    console.warn(
-      `[Queue] Monitoring background worker unavailable: ${queueStatus.reason ?? "Unknown reason"}`
-    );
+    logger.warn("Monitoring background worker unavailable", {
+      reason: queueStatus.reason ?? "Unknown reason",
+    });
   }
 });

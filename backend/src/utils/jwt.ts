@@ -1,16 +1,16 @@
-import jwt from "jsonwebtoken";
+import jwt, { SignOptions } from "jsonwebtoken";
 import { env } from "../config/env";
 
-const JWT_EXPIRES_IN = "8h";
-
 export const generateToken = (userId: string) => {
-  return jwt.sign({}, env.JWT_SECRET_CURRENT, {
+  const options: SignOptions = {
     algorithm: "HS256",
     audience: env.JWT_AUDIENCE,
-    expiresIn: JWT_EXPIRES_IN,
+    expiresIn: `${env.ACCESS_TOKEN_TTL_MINUTES}m`,
     issuer: env.JWT_ISSUER,
     subject: userId,
-  });
+  };
+
+  return jwt.sign({}, env.JWT_SECRET_CURRENT, options);
 };
 
 export const verifyToken = (token: string) => {

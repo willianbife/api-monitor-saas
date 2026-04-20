@@ -6,6 +6,7 @@ import { Register } from "./pages/Register";
 import { Dashboard } from "./pages/Dashboard";
 import { Endpoints } from "./pages/Endpoints";
 import { Settings } from "./pages/Settings";
+import { StatusPage } from "./pages/StatusPage";
 import { DashboardSkeleton } from "./components/dashboard/DashboardSkeleton";
 
 function App() {
@@ -23,6 +24,7 @@ function App() {
     <Routes>
       <Route path="/login" element={!user ? <Login /> : <Navigate to="/" />} />
       <Route path="/register" element={!user ? <Register /> : <Navigate to="/" />} />
+      <Route path="/status/:slug" element={<StatusPage />} />
 
       <Route path="/" element={user ? <DashboardLayout /> : <Navigate to="/login" />}>
         <Route index element={<Dashboard />} />
