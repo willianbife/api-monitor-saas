@@ -58,7 +58,13 @@ export const Dashboard: React.FC = () => {
     }
 
     try {
-      const response = await api.get("/endpoints");
+      const response = await api.get("/endpoints", {
+        params: { _ts: Date.now() },
+        headers: {
+          "Cache-Control": "no-store",
+          Pragma: "no-cache",
+        },
+      });
       setEndpoints(response.data.endpoints);
       setMonitoringStatus(response.data.monitoring ?? null);
     } catch (err) {
@@ -73,7 +79,13 @@ export const Dashboard: React.FC = () => {
     let mounted = true;
 
     void api
-      .get("/endpoints")
+      .get("/endpoints", {
+        params: { _ts: Date.now() },
+        headers: {
+          "Cache-Control": "no-store",
+          Pragma: "no-cache",
+        },
+      })
       .then((response) => {
         if (!mounted) return;
         setEndpoints(response.data.endpoints);
@@ -105,10 +117,25 @@ export const Dashboard: React.FC = () => {
   useEffect(() => {
     const intervalId = window.setInterval(() => {
       void fetchEndpoints();
-    }, 20000);
+    }, 10000);
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        void fetchEndpoints();
+      }
+    };
+
+    const handleWindowFocus = () => {
+      void fetchEndpoints();
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("focus", handleWindowFocus);
 
     return () => {
       window.clearInterval(intervalId);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("focus", handleWindowFocus);
     };
   }, []);
 
@@ -138,6 +165,7 @@ export const Dashboard: React.FC = () => {
 
     const handleSocketError = (error: Error) => {
       console.error("Socket connection failed", error.message);
+      socket.disconnect();
     };
 
     socket.on("endpoint_update", handleEndpointUpdate);
