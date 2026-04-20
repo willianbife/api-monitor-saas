@@ -6,12 +6,23 @@ import {
 } from "../controllers/endpoint.controller";
 import { asyncHandler } from "../middlewares/async.middleware";
 import { requireAuth } from "../middlewares/auth.middleware";
+import {
+  methodNotAllowed,
+  requireJsonContentType,
+} from "../middlewares/request-guards.middleware";
 
 const router = Router();
 
 router.use(requireAuth);
-router.get("/", asyncHandler(listEndpoints));
-router.post("/", asyncHandler(createEndpoint));
-router.delete("/:id", asyncHandler(deleteEndpoint));
+router
+  .route("/")
+  .get(asyncHandler(listEndpoints))
+  .post(requireJsonContentType, asyncHandler(createEndpoint))
+  .all(methodNotAllowed(["GET", "POST"]));
+
+router
+  .route("/:id")
+  .delete(asyncHandler(deleteEndpoint))
+  .all(methodNotAllowed(["DELETE"]));
 
 export default router;

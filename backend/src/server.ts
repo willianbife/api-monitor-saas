@@ -10,6 +10,7 @@ import {
   allowedMethods,
   allowedOrigins,
   isAllowedOrigin,
+  securityHeaders,
 } from "./config/security";
 import { initSocket } from "./lib/socket";
 import { csrfProtection } from "./middlewares/csrf.middleware";
@@ -36,7 +37,12 @@ initSocket(server);
 
 const corsOptions: cors.CorsOptions = {
   origin(origin, callback) {
-    if (!origin || isAllowedOrigin(origin)) {
+    if (!origin) {
+      callback(null, false);
+      return;
+    }
+
+    if (isAllowedOrigin(origin)) {
       callback(null, true);
       return;
     }
@@ -58,24 +64,42 @@ app.use(
         baseUri: ["'self'"],
         connectSrc: ["'self'", ...allowedOrigins],
         frameAncestors: ["'none'"],
-        imgSrc: ["'self'", "data:"],
+        imgSrc: ["'self'", "data:", "https:"],
+        fontSrc: ["'self'", "data:"],
         objectSrc: ["'none'"],
+        formAction: ["'self'"],
+        manifestSrc: ["'self'"],
         scriptSrc: ["'self'"],
         styleSrc: ["'self'", "'unsafe-inline'"],
         upgradeInsecureRequests: [],
       },
     },
     crossOriginEmbedderPolicy: false,
+    frameguard: {
+      action: "deny",
+    },
     hsts: {
       maxAge: 63072000,
       includeSubDomains: true,
       preload: true,
+    },
+    noSniff: true,
+    permittedCrossDomainPolicies: {
+      permittedPolicies: "none",
     },
     referrerPolicy: {
       policy: "strict-origin-when-cross-origin",
     },
   })
 );
+app.use((_req, res, next) => {
+  res.setHeader("X-Frame-Options", securityHeaders.frameOptions);
+  res.setHeader("X-Content-Type-Options", securityHeaders.contentTypeOptions);
+  res.setHeader("Referrer-Policy", securityHeaders.referrerPolicy);
+  res.setHeader("Permissions-Policy", securityHeaders.permissionsPolicy);
+  res.setHeader("Content-Security-Policy", securityHeaders.contentSecurityPolicy);
+  next();
+});
 app.use(cors(corsOptions));
 app.options("/{*splat}", cors(corsOptions));
 app.use(express.json({ limit: "32kb" }));

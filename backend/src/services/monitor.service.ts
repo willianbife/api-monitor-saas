@@ -9,6 +9,7 @@ import { openOrUpdateIncidentForFailure, resolveIncidentForRecovery } from "./in
 import { queueAlertNotifications } from "./alert.service";
 import { persistAvailabilityWindows } from "./availability.service";
 import { incrementUsageMetric } from "./usage.service";
+import { assertSafeMonitoringUrl } from "../utils/ssrf";
 
 interface RequestMetrics {
   statusCode: number | null;
@@ -208,6 +209,41 @@ export const checkEndpoint = async (endpointId: string) => {
 
   if (!endpoint || !endpoint.isActive) {
     return;
+  }
+
+  try {
+    await assertSafeMonitoringUrl(endpoint.url);
+  } catch (error) {
+    logger.warn("Blocked unsafe monitor target", {
+      endpointId: endpoint.id,
+      workspaceId: endpoint.workspaceId,
+      reason: error instanceof Error ? error.message : "Unsafe target",
+    });
+
+    const result = await prisma.apiCheckResult.create({
+      data: {
+        endpointId: endpoint.id,
+        region: "PRIMARY",
+        statusCode: null,
+        responseTime: 0,
+        totalResponseMs: 0,
+        attemptCount: 1,
+        failureReason: "Blocked by SSRF protection",
+        validationPassed: false,
+        isAnomaly: false,
+        state: "DOWN",
+      },
+    });
+
+    await prisma.apiEndpoint.update({
+      where: { id: endpoint.id },
+      data: {
+        currentState: "DOWN",
+        lastCheckedAt: result.createdAt,
+      },
+    });
+
+    return result;
   }
 
   const headers = decryptJson<Record<string, string>>(endpoint.requestHeadersEncrypted) || {};

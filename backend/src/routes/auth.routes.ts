@@ -14,19 +14,66 @@ import {
 } from "../controllers/auth.controller";
 import { asyncHandler } from "../middlewares/async.middleware";
 import { requireAuth } from "../middlewares/auth.middleware";
+import {
+  methodNotAllowed,
+  requireJsonContentType,
+} from "../middlewares/request-guards.middleware";
 
 const router = Router();
 
-router.get("/csrf", asyncHandler(csrf));
-router.get("/session", asyncHandler(session));
-router.post("/register", asyncHandler(register));
-router.post("/login", asyncHandler(login));
-router.post("/refresh", asyncHandler(refresh));
-router.post("/password-reset/request", asyncHandler(requestPasswordReset));
-router.post("/password-reset/confirm", asyncHandler(resetPassword));
-router.post("/email-verification/request", requireAuth, asyncHandler(requestEmailVerification));
-router.post("/email-verification/confirm", asyncHandler(verifyEmail));
-router.post("/logout", requireAuth, asyncHandler(logout));
-router.get("/me", requireAuth, asyncHandler(me));
+router
+  .route("/csrf")
+  .get(asyncHandler(csrf))
+  .all(methodNotAllowed(["GET"]));
+
+router
+  .route("/session")
+  .get(asyncHandler(session))
+  .all(methodNotAllowed(["GET"]));
+
+router
+  .route("/register")
+  .post(requireJsonContentType, asyncHandler(register))
+  .all(methodNotAllowed(["POST"]));
+
+router
+  .route("/login")
+  .post(requireJsonContentType, asyncHandler(login))
+  .all(methodNotAllowed(["POST"]));
+
+router
+  .route("/refresh")
+  .post(asyncHandler(refresh))
+  .all(methodNotAllowed(["POST"]));
+
+router
+  .route("/password-reset/request")
+  .post(requireJsonContentType, asyncHandler(requestPasswordReset))
+  .all(methodNotAllowed(["POST"]));
+
+router
+  .route("/password-reset/confirm")
+  .post(requireJsonContentType, asyncHandler(resetPassword))
+  .all(methodNotAllowed(["POST"]));
+
+router
+  .route("/email-verification/request")
+  .post(requireAuth, asyncHandler(requestEmailVerification))
+  .all(methodNotAllowed(["POST"]));
+
+router
+  .route("/email-verification/confirm")
+  .post(requireJsonContentType, asyncHandler(verifyEmail))
+  .all(methodNotAllowed(["POST"]));
+
+router
+  .route("/logout")
+  .post(requireAuth, asyncHandler(logout))
+  .all(methodNotAllowed(["POST"]));
+
+router
+  .route("/me")
+  .get(requireAuth, asyncHandler(me))
+  .all(methodNotAllowed(["GET"]));
 
 export default router;

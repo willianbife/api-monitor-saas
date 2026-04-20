@@ -21,6 +21,7 @@ import {
 import { recordAuditEvent } from "../services/audit.service";
 import { calculateAvailabilitySummary } from "../services/availability.service";
 import { incrementUsageMetric } from "../services/usage.service";
+import { assertSafeMonitoringUrl } from "../utils/ssrf";
 
 const endpointMethodSchema = z.enum(["GET", "POST", "PUT", "DELETE"]);
 const regionSchema = z.enum(["PRIMARY", "US_EAST", "US_WEST", "EU_CENTRAL", "SA_EAST"]);
@@ -234,6 +235,7 @@ export const createEndpoint = async (
 
   const membership = await getActiveWorkspaceForUser(req.userId, input.workspaceId);
   requireWorkspaceRole("ADMIN", membership.role);
+  await assertSafeMonitoringUrl(input.url);
 
   const queueStatus = getMonitorQueueStatus();
   if (!queueStatus.enabled || !queueStatus.available) {

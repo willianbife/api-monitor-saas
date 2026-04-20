@@ -20,6 +20,11 @@ import { env } from "../config/env";
 import { createPersonalWorkspace } from "../services/workspace.service";
 import { recordAuditEvent } from "../services/audit.service";
 
+const DUMMY_PASSWORD_HASH =
+  "$2b$12$k.HXoyXnYSKVpUDP2oBuReb1ELUYWYrvFByX0zDgbV08mFR4UlHeO";
+
+const invalidCredentialsError = () => new HttpError(401, "Invalid credentials");
+
 const passwordSchema = z
   .string()
   .min(12, "Password must be at least 12 characters")
@@ -142,7 +147,13 @@ export const register = async (req: Request, res: Response): Promise<void> => {
 
   const existingUser = await prisma.user.findUnique({ where: { email: sanitizedEmail } });
   if (existingUser) {
-    throw new HttpError(409, "Email already in use");
+    await bcrypt.compare(password, DUMMY_PASSWORD_HASH);
+    res.status(202).json({
+      success: true,
+      user: null,
+      csrfToken: generateSignedCsrfToken(),
+    });
+    return;
   }
 
   const hashedPassword = await bcrypt.hash(password, 12);
@@ -177,7 +188,8 @@ export const register = async (req: Request, res: Response): Promise<void> => {
     workspaceId: authUser.defaultWorkspaceId,
   });
 
-  res.status(201).json({
+  res.status(202).json({
+    success: true,
     user: authUser,
     csrfToken,
     emailVerificationToken: serializeTokenForResponse(verificationToken),
@@ -190,12 +202,13 @@ export const login = async (req: Request, res: Response): Promise<void> => {
 
   const user = await prisma.user.findUnique({ where: { email: sanitizedEmail } });
   if (!user) {
-    throw new HttpError(401, "Invalid credentials");
+    await bcrypt.compare(password, DUMMY_PASSWORD_HASH);
+    throw invalidCredentialsError();
   }
 
   const isValid = await bcrypt.compare(password, user.password);
   if (!isValid) {
-    throw new HttpError(401, "Invalid credentials");
+    throw invalidCredentialsError();
   }
 
   const csrfToken = await issueSession(req, res, user.id);
@@ -219,7 +232,7 @@ export const refresh = async (req: Request, res: Response): Promise<void> => {
   const refreshToken = getCookie(req, refreshCookieName);
 
   if (!refreshToken) {
-    throw new HttpError(401, "Refresh token missing");
+    throw new HttpError(401, "Session is invalid or expired");
   }
 
   const tokenHash = hashToken(refreshToken);
@@ -229,7 +242,7 @@ export const refresh = async (req: Request, res: Response): Promise<void> => {
   });
 
   if (!storedToken || storedToken.revokedAt || storedToken.expiresAt < new Date()) {
-    throw new HttpError(401, "Refresh token is invalid or expired");
+    throw new HttpError(401, "Session is invalid or expired");
   }
 
   await prisma.refreshToken.update({

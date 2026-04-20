@@ -1,6 +1,7 @@
 import { NextFunction, Request, Response } from "express";
 import { ZodError } from "zod";
 import { HttpError } from "../utils/http-errors";
+import { env } from "../config/env";
 
 export const notFoundHandler = (_req: Request, res: Response) => {
   res.status(404).json({ error: "Resource not found" });
@@ -15,7 +16,7 @@ export const errorHandler = (
   if (error instanceof ZodError) {
     res.status(400).json({
       error: "Validation failed",
-      details: error.flatten(),
+      ...(env.NODE_ENV !== "production" ? { details: error.flatten() } : {}),
     });
     return;
   }
@@ -23,7 +24,7 @@ export const errorHandler = (
   if (error instanceof HttpError) {
     res.status(error.statusCode).json({
       error: error.message,
-      ...(error.details ? { details: error.details } : {}),
+      ...(env.NODE_ENV !== "production" && error.details ? { details: error.details } : {}),
     });
     return;
   }

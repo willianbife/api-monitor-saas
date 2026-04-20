@@ -6,12 +6,23 @@ import {
 } from "../controllers/billing.controller";
 import { asyncHandler } from "../middlewares/async.middleware";
 import { requireAuth } from "../middlewares/auth.middleware";
+import {
+  methodNotAllowed,
+  requireJsonContentType,
+} from "../middlewares/request-guards.middleware";
 
 const router = Router();
 
-router.post("/stripe/webhook", asyncHandler(stripeWebhook));
+router
+  .route("/stripe/webhook")
+  .post(requireJsonContentType, asyncHandler(stripeWebhook))
+  .all(methodNotAllowed(["POST"]));
+
 router.use(requireAuth);
-router.get("/", asyncHandler(getBillingOverview));
-router.put("/", asyncHandler(updateBilling));
+router
+  .route("/")
+  .get(asyncHandler(getBillingOverview))
+  .put(requireJsonContentType, asyncHandler(updateBilling))
+  .all(methodNotAllowed(["GET", "PUT"]));
 
 export default router;

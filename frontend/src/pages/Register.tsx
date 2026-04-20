@@ -24,13 +24,22 @@ export const Register: React.FC = () => {
     try {
       await initializeCsrf();
       const response = await api.post("/auth/register", { email, password });
-      login(response.data.user);
-      emitToast({
-        kind: "success",
-        title: "Account created",
-        description: "Your monitoring workspace is ready.",
-      });
-      navigate("/");
+      if (response.data.user) {
+        login(response.data.user);
+        emitToast({
+          kind: "success",
+          title: "Account created",
+          description: "Your monitoring workspace is ready.",
+        });
+        navigate("/");
+      } else {
+        emitToast({
+          kind: "success",
+          title: "Registration received",
+          description: "If the account is eligible, continue with sign in.",
+        });
+        navigate("/login");
+      }
     } catch (err) {
       if (axios.isAxiosError<{ error?: string }>(err)) {
         setError(err.response?.data?.error || "Failed to register");
