@@ -9,7 +9,6 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import api from "../services/api";
-import { io, Socket } from "socket.io-client";
 import { useAuth } from "../contexts/AuthContext";
 
 interface Endpoint {
@@ -45,7 +44,6 @@ export const Dashboard: React.FC = () => {
   const { user } = useAuth();
   const [endpoints, setEndpoints] = useState<Endpoint[]>([]);
   const [liveData, setLiveData] = useState<Record<string, ChartPoint[]>>({});
-  const [socket, setSocket] = useState<Socket | null>(null);
   const [monitoringStatus, setMonitoringStatus] = useState<MonitoringStatus | null>(null);
 
   useEffect(() => {
@@ -83,49 +81,14 @@ export const Dashboard: React.FC = () => {
     };
 
     void fetchEndpoints();
-
-    const socketUrl = import.meta.env.VITE_API_URL.replace(/\/api$/, "");
-    const newSocket = io(socketUrl, { withCredentials: true });
-    setSocket(newSocket);
+    const intervalId = window.setInterval(() => {
+      void fetchEndpoints();
+    }, 15000);
 
     return () => {
-      newSocket.disconnect();
+      window.clearInterval(intervalId);
     };
   }, []);
-
-  useEffect(() => {
-    if (!socket) return;
-
-    const handleEndpointUpdate = (result: EndpointUpdate) => {
-      setLiveData((prev) => {
-        const current = prev[result.endpointId] || [];
-        const time = new Date(result.createdAt).toLocaleTimeString([], {
-          hour: "2-digit",
-          minute: "2-digit",
-          second: "2-digit",
-        });
-
-        const newData = [
-          ...current,
-          {
-            name: time,
-            latency: result.responseTime,
-            status: result.statusCode,
-          },
-        ];
-
-        if (newData.length > 20) newData.shift();
-
-        return { ...prev, [result.endpointId]: newData };
-      });
-    };
-
-    socket.on("endpoint_update", handleEndpointUpdate);
-
-    return () => {
-      socket.off("endpoint_update", handleEndpointUpdate);
-    };
-  }, [socket]);
 
   return (
     <div className="animate-fade-in">
