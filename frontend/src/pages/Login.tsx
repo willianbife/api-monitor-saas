@@ -1,8 +1,11 @@
 import React, { useState } from "react";
+import axios from "axios";
 import { useNavigate, Link } from "react-router-dom";
 import { Activity } from "lucide-react";
 import api, { initializeCsrf } from "../services/api";
-import { useAuth } from "../contexts/AuthContext";
+import { useAuth } from "../contexts/useAuth";
+import { Spinner } from "../components/ui/Spinner";
+import { emitToast } from "../lib/app-events";
 
 export const Login: React.FC = () => {
   const [email, setEmail] = useState("");
@@ -22,9 +25,18 @@ export const Login: React.FC = () => {
       await initializeCsrf();
       const response = await api.post("/auth/login", { email, password });
       login(response.data.user);
+      emitToast({
+        kind: "success",
+        title: "Welcome back",
+        description: "You are signed in and monitoring is live.",
+      });
       navigate("/");
-    } catch (err: any) {
-      setError(err.response?.data?.error || "Failed to login");
+    } catch (err) {
+      if (axios.isAxiosError<{ error?: string }>(err)) {
+        setError(err.response?.data?.error || "Failed to login");
+      } else {
+        setError("Failed to login");
+      }
     } finally {
       setLoading(false);
     }
@@ -91,6 +103,7 @@ export const Login: React.FC = () => {
             style={{ width: "100%", padding: "12px" }}
             disabled={loading}
           >
+            {loading ? <Spinner size="sm" /> : null}
             {loading ? "Signing in..." : "Sign In"}
           </button>
         </form>

@@ -1,15 +1,26 @@
 import React, { useState, useEffect } from "react";
+import axios from "axios";
 import api from "../services/api";
-import { Activity, Trash2, Plus, Clock } from "lucide-react";
+import { Plus, Clock, DatabaseZap, Trash2 } from "lucide-react";
+import { EmptyState } from "../components/ui/EmptyState";
+import { Skeleton } from "../components/ui/Skeleton";
+import { Spinner } from "../components/ui/Spinner";
+import { emitToast } from "../lib/app-events";
+import type { Endpoint } from "../types/monitoring";
+import { getMonitoringStatus, getRelativeTimestamp } from "../utils/monitoring";
+import { StatusBadge } from "../components/ui/StatusBadge";
 
-interface Endpoint {
-  id: string;
-  name: string;
-  url: string;
-  interval: number;
-  createdAt: string;
-  updatedAt: string;
-}
+const EndpointsSkeleton = () => (
+  <div style={{ display: "grid", gap: "16px" }}>
+    {Array.from({ length: 3 }).map((_, index) => (
+      <div key={index} className="card">
+        <Skeleton className="skeleton-title" />
+        <Skeleton className="skeleton-subtitle" />
+        <Skeleton className="skeleton-subtitle" />
+      </div>
+    ))}
+  </div>
+);
 
 export const Endpoints: React.FC = () => {
   const [endpoints, setEndpoints] = useState<Endpoint[]>([]);
@@ -19,6 +30,8 @@ export const Endpoints: React.FC = () => {
   const [url, setUrl] = useState("");
   const [interval, setInterval] = useState(60);
   const [error, setError] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const fetchEndpoints = async () => {
     try {
@@ -32,12 +45,34 @@ export const Endpoints: React.FC = () => {
   };
 
   useEffect(() => {
-    void fetchEndpoints();
+    let mounted = true;
+
+    void api
+      .get("/endpoints")
+      .then((response) => {
+        if (mounted) {
+          setEndpoints(response.data.endpoints);
+        }
+      })
+      .catch((err) => {
+        console.error("Failed to fetch endpoints", err);
+      })
+      .finally(() => {
+        if (mounted) {
+          setLoading(false);
+        }
+      });
+
+    return () => {
+      mounted = false;
+    };
   }, []);
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+    setIsSubmitting(true);
+
     try {
       await api.post("/endpoints", { name, url, interval: Number(interval) });
       setIsModalOpen(false);
@@ -45,18 +80,38 @@ export const Endpoints: React.FC = () => {
       setUrl("");
       setInterval(60);
       await fetchEndpoints();
-    } catch (err: any) {
-      setError(err.response?.data?.error || "Failed to create endpoint");
+      emitToast({
+        kind: "success",
+        title: "Endpoint created",
+        description: "Monitoring is live and the first checks are on the way.",
+      });
+    } catch (err) {
+      if (axios.isAxiosError<{ error?: string }>(err)) {
+        setError(err.response?.data?.error || "Failed to create endpoint");
+      } else {
+        setError("Failed to create endpoint");
+      }
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   const handleDelete = async (id: string) => {
     if (!window.confirm("Are you sure you want to delete this endpoint?")) return;
+    setDeletingId(id);
+
     try {
       await api.delete(`/endpoints/${id}`);
       await fetchEndpoints();
+      emitToast({
+        kind: "success",
+        title: "Endpoint removed",
+        description: "The monitor has been removed from your workspace.",
+      });
     } catch (err) {
       console.error("Failed to delete endpoint", err);
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -66,7 +121,7 @@ export const Endpoints: React.FC = () => {
         <div>
           <h1 className="page-title">Monitored Endpoints</h1>
           <p style={{ color: "var(--text-secondary)", marginTop: "4px" }}>
-            Manage the APIs you are currently tracking
+            Manage your checks, intervals and health snapshots without losing context.
           </p>
         </div>
         <button className="btn btn-primary" onClick={() => setIsModalOpen(true)}>
@@ -75,20 +130,29 @@ export const Endpoints: React.FC = () => {
       </div>
 
       {loading ? (
-        <div style={{ textAlign: "center", padding: "40px", color: "var(--text-secondary)" }}>
-          Loading endpoints...
-        </div>
+        <EndpointsSkeleton />
       ) : endpoints.length === 0 ? (
-        <div className="card" style={{ textAlign: "center", padding: "60px 20px" }}>
-          <Activity size={48} color="var(--text-muted)" style={{ margin: "0 auto 16px" }} />
-          <h3 style={{ marginBottom: "8px" }}>No endpoints found</h3>
-          <p style={{ color: "var(--text-secondary)", marginBottom: "24px" }}>
-            You haven't added any APIs to monitor yet.
-          </p>
-          <button className="btn btn-outline" onClick={() => setIsModalOpen(true)}>
-            Add your first endpoint
-          </button>
-        </div>
+        <EmptyState
+          title="No endpoints in this workspace"
+          description="Create a monitor to unlock real-time charts, error history and anomaly insights."
+          action={
+            <button className="btn btn-primary" onClick={() => setIsModalOpen(true)}>
+              <Plus size={16} /> Add your first endpoint
+            </button>
+          }
+          illustration={
+            <svg width="130" height="92" viewBox="0 0 130 92" fill="none">
+              <rect x="8" y="10" width="114" height="72" rx="18" fill="var(--empty-illustration-bg)" />
+              <path
+                d="M34 54h18l8-20 11 28 13-16 12 8"
+                stroke="var(--primary)"
+                strokeWidth="6"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          }
+        />
       ) : (
         <div style={{ display: "grid", gap: "16px" }}>
           {endpoints.map((ep) => (
@@ -104,7 +168,7 @@ export const Endpoints: React.FC = () => {
                   }}
                 >
                   {ep.name}
-                  <span className="badge badge-success">ACTIVE</span>
+                  <StatusBadge status={getMonitoringStatus(ep.results[0])} />
                 </h3>
                 <p
                   style={{
@@ -118,6 +182,7 @@ export const Endpoints: React.FC = () => {
                 <div
                   style={{
                     display: "flex",
+                    flexWrap: "wrap",
                     gap: "16px",
                     fontSize: "0.85rem",
                     color: "var(--text-muted)",
@@ -126,20 +191,25 @@ export const Endpoints: React.FC = () => {
                   <span style={{ display: "flex", alignItems: "center", gap: "4px" }}>
                     <Clock size={14} /> Interval: {ep.interval}s
                   </span>
+                  <span style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                    <DatabaseZap size={14} /> Last check: {getRelativeTimestamp(ep.results[0]?.createdAt || null)}
+                  </span>
                 </div>
               </div>
               <div>
                 <button
                   className="btn btn-outline"
                   style={{
-                    color: "var(--error)",
+                    color: "var(--danger)",
                     borderColor: "var(--border-color)",
                     padding: "8px",
                   }}
                   onClick={() => void handleDelete(ep.id)}
                   title="Delete Endpoint"
+                  aria-label={`Delete endpoint ${ep.name}`}
+                  disabled={deletingId === ep.id}
                 >
-                  <Trash2 size={18} />
+                  {deletingId === ep.id ? <Spinner size="sm" /> : <Trash2 size={18} />}
                 </button>
               </div>
             </div>
@@ -217,11 +287,13 @@ export const Endpoints: React.FC = () => {
                   className="btn btn-outline"
                   style={{ flex: 1 }}
                   onClick={() => setIsModalOpen(false)}
+                  disabled={isSubmitting}
                 >
                   Cancel
                 </button>
-                <button type="submit" className="btn btn-primary" style={{ flex: 1 }}>
-                  Save Endpoint
+                <button type="submit" className="btn btn-primary" style={{ flex: 1 }} disabled={isSubmitting}>
+                  {isSubmitting ? <Spinner size="sm" /> : null}
+                  {isSubmitting ? "Saving..." : "Save Endpoint"}
                 </button>
               </div>
             </form>

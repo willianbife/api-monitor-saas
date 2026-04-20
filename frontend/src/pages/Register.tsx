@@ -1,8 +1,11 @@
 import React, { useState } from "react";
+import axios from "axios";
 import { useNavigate, Link } from "react-router-dom";
 import { Activity } from "lucide-react";
 import api, { initializeCsrf } from "../services/api";
-import { useAuth } from "../contexts/AuthContext";
+import { useAuth } from "../contexts/useAuth";
+import { Spinner } from "../components/ui/Spinner";
+import { emitToast } from "../lib/app-events";
 
 export const Register: React.FC = () => {
   const [email, setEmail] = useState("");
@@ -22,9 +25,18 @@ export const Register: React.FC = () => {
       await initializeCsrf();
       const response = await api.post("/auth/register", { email, password });
       login(response.data.user);
+      emitToast({
+        kind: "success",
+        title: "Account created",
+        description: "Your monitoring workspace is ready.",
+      });
       navigate("/");
-    } catch (err: any) {
-      setError(err.response?.data?.error || "Failed to register");
+    } catch (err) {
+      if (axios.isAxiosError<{ error?: string }>(err)) {
+        setError(err.response?.data?.error || "Failed to register");
+      } else {
+        setError("Failed to register");
+      }
     } finally {
       setLoading(false);
     }
@@ -92,6 +104,7 @@ export const Register: React.FC = () => {
             style={{ width: "100%", padding: "12px" }}
             disabled={loading}
           >
+            {loading ? <Spinner size="sm" /> : null}
             {loading ? "Creating account..." : "Sign Up"}
           </button>
         </form>

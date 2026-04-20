@@ -1,18 +1,22 @@
-import { Routes, Route, Navigate } from 'react-router-dom';
-import { useAuth } from './contexts/AuthContext';
-import { DashboardLayout } from './layouts/DashboardLayout';
-import { Login } from './pages/Login';
-import { Register } from './pages/Register';
-import { Dashboard } from './pages/Dashboard';
-
-import { Endpoints } from './pages/Endpoints';
-import { Settings } from './pages/Settings';
+import { Routes, Route, Navigate } from "react-router-dom";
+import { useAuth } from "./contexts/useAuth";
+import { DashboardLayout } from "./layouts/DashboardLayout";
+import { Login } from "./pages/Login";
+import { Register } from "./pages/Register";
+import { Dashboard } from "./pages/Dashboard";
+import { Endpoints } from "./pages/Endpoints";
+import { Settings } from "./pages/Settings";
+import { DashboardSkeleton } from "./components/dashboard/DashboardSkeleton";
 
 function App() {
   const { user, loading } = useAuth();
 
   if (loading) {
-    return <div style={{ display: 'flex', height: '100vh', alignItems: 'center', justifyContent: 'center' }}>Loading...</div>;
+    return (
+      <div className="app-shell-loader">
+        <DashboardSkeleton />
+      </div>
+    );
   }
 
   return (

@@ -1,38 +1,33 @@
-import React, { createContext, useContext, useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import api, { initializeCsrf } from "../services/api";
-
-interface User {
-  id: string;
-  email: string;
-}
-
-interface AuthContextType {
-  user: User | null;
-  loading: boolean;
-  login: (user: User) => void;
-  logout: () => Promise<void>;
-}
-
-const AuthContext = createContext<AuthContextType>({} as AuthContextType);
+import { AuthContext, type User } from "./auth-context";
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const loadUser = async () => {
-      try {
-        await initializeCsrf();
-        const response = await api.get("/auth/session");
-        setUser(response.data.authenticated ? response.data.user : null);
-      } catch {
-        setUser(null);
-      } finally {
-        setLoading(false);
-      }
-    };
+    let mounted = true;
 
-    void loadUser();
+    void initializeCsrf()
+      .then(() => api.get("/auth/session"))
+      .then((response) => {
+        if (!mounted) return;
+        setUser(response.data.authenticated ? response.data.user : null);
+      })
+      .catch(() => {
+        if (!mounted) return;
+        setUser(null);
+      })
+      .finally(() => {
+        if (mounted) {
+          setLoading(false);
+        }
+      });
+
+    return () => {
+      mounted = false;
+    };
   }, []);
 
   const login = (nextUser: User) => {
@@ -50,5 +45,3 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     </AuthContext.Provider>
   );
 };
-
-export const useAuth = () => useContext(AuthContext);
