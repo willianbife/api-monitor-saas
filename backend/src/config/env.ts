@@ -65,7 +65,7 @@ export const env = {
   ENABLE_MONITOR_WORKER:
     parsedEnv.data.ENABLE_MONITOR_WORKER ?? parsedEnv.data.NODE_ENV !== "production",
   EMBEDDED_WORKER:
-    parsedEnv.data.EMBEDDED_WORKER ?? parsedEnv.data.NODE_ENV !== "production",
+    parsedEnv.data.EMBEDDED_WORKER ?? true,
   JWT_SECRET_PREVIOUS: parsedEnv.data.JWT_SECRET_PREVIOUS || undefined,
   APP_ENCRYPTION_KEY:
     parsedEnv.data.APP_ENCRYPTION_KEY ||
