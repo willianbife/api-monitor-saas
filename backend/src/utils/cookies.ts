@@ -1,6 +1,6 @@
 import { Request, Response } from "express";
 import crypto from "crypto";
-import { csrfCookieName, sessionCookieName } from "../config/security";
+import { sessionCookieName } from "../config/security";
 import { isProduction } from "../config/env";
 
 const baseCookieOptions = {
@@ -45,7 +45,7 @@ export const setSessionCookie = (res: Response, token: string) => {
   res.cookie(sessionCookieName, token, {
     ...baseCookieOptions,
     httpOnly: true,
-    sameSite: "strict",
+    sameSite: isProduction ? "none" : "lax",
     maxAge: 1000 * 60 * 60 * 8,
   });
 };
@@ -54,23 +54,6 @@ export const clearSessionCookie = (res: Response) => {
   res.clearCookie(sessionCookieName, {
     ...baseCookieOptions,
     httpOnly: true,
-    sameSite: "strict",
-  });
-};
-
-export const setCsrfCookie = (res: Response, token: string) => {
-  res.cookie(csrfCookieName, token, {
-    ...baseCookieOptions,
-    httpOnly: false,
-    sameSite: "strict",
-    maxAge: 1000 * 60 * 60 * 8,
-  });
-};
-
-export const clearCsrfCookie = (res: Response) => {
-  res.clearCookie(csrfCookieName, {
-    ...baseCookieOptions,
-    httpOnly: false,
-    sameSite: "strict",
+    sameSite: isProduction ? "none" : "lax",
   });
 };

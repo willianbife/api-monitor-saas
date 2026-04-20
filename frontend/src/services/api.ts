@@ -1,28 +1,25 @@
 import axios from "axios";
 
-const readCookie = (name: string) => {
-  const cookies = document.cookie.split(";").map((part) => part.trim());
-  const match = cookies.find((cookie) => cookie.startsWith(`${name}=`));
-  return match ? decodeURIComponent(match.slice(name.length + 1)) : "";
-};
-
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL,
   withCredentials: true,
 });
 
 let csrfBootstrapPromise: Promise<string> | null = null;
+let csrfTokenCache = "";
 
 export const initializeCsrf = async () => {
-  const existingToken = readCookie("api_monitor_csrf");
-  if (existingToken) {
-    return existingToken;
+  if (csrfTokenCache) {
+    return csrfTokenCache;
   }
 
   if (!csrfBootstrapPromise) {
     csrfBootstrapPromise = api
       .get("/auth/csrf")
-      .then((response) => response.data.csrfToken as string)
+      .then((response) => {
+        csrfTokenCache = response.data.csrfToken as string;
+        return csrfTokenCache;
+      })
       .finally(() => {
         csrfBootstrapPromise = null;
       });
@@ -35,7 +32,7 @@ api.interceptors.request.use(async (config) => {
   const method = (config.method || "get").toUpperCase();
 
   if (["POST", "PUT", "PATCH", "DELETE"].includes(method)) {
-    const csrfToken = readCookie("api_monitor_csrf") || (await initializeCsrf());
+    const csrfToken = csrfTokenCache || (await initializeCsrf());
     config.headers["X-CSRF-Token"] = csrfToken;
   }
 

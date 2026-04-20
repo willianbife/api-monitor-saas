@@ -1,6 +1,6 @@
 import { NextFunction, Request, Response } from "express";
-import { csrfCookieName, isAllowedOrigin, safeMethods } from "../config/security";
-import { getCookie } from "../utils/cookies";
+import { isAllowedOrigin, safeMethods } from "../config/security";
+import { verifySignedCsrfToken } from "../utils/csrf";
 
 const normalizeOrigin = (value: string) => {
   try {
@@ -22,10 +22,9 @@ export const csrfProtection = (req: Request, res: Response, next: NextFunction):
     return;
   }
 
-  const csrfCookie = getCookie(req, csrfCookieName);
   const csrfHeader = req.header("X-CSRF-Token");
 
-  if (!csrfCookie || !csrfHeader || csrfCookie !== csrfHeader) {
+  if (!csrfHeader || !verifySignedCsrfToken(csrfHeader)) {
     res.status(403).json({ error: "Invalid CSRF token" });
     return;
   }

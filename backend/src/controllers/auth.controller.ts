@@ -3,16 +3,14 @@ import bcrypt from "bcrypt";
 import { z } from "zod";
 import prisma from "../lib/prisma";
 import {
-  clearCsrfCookie,
   clearSessionCookie,
-  generateCsrfToken,
-  setCsrfCookie,
   setSessionCookie,
 } from "../utils/cookies";
 import { generateToken } from "../utils/jwt";
 import { sanitizePlainText } from "../utils/sanitize";
 import { HttpError } from "../utils/http-errors";
 import { AuthRequest } from "../middlewares/auth.middleware";
+import { generateSignedCsrfToken } from "../utils/csrf";
 
 const registerSchema = z
   .object({
@@ -36,10 +34,9 @@ const loginSchema = z
 
 const issueSession = (res: Response, userId: string) => {
   const sessionToken = generateToken(userId);
-  const csrfToken = generateCsrfToken();
+  const csrfToken = generateSignedCsrfToken();
 
   setSessionCookie(res, sessionToken);
-  setCsrfCookie(res, csrfToken);
 
   return csrfToken;
 };
@@ -104,20 +101,17 @@ export const me = async (req: AuthRequest, res: Response): Promise<void> => {
     throw new HttpError(404, "User not found");
   }
 
-  const csrfToken = generateCsrfToken();
-  setCsrfCookie(res, csrfToken);
+  const csrfToken = generateSignedCsrfToken();
 
   res.json({ user, csrfToken });
 };
 
 export const csrf = async (_req: Request, res: Response): Promise<void> => {
-  const csrfToken = generateCsrfToken();
-  setCsrfCookie(res, csrfToken);
+  const csrfToken = generateSignedCsrfToken();
   res.status(200).json({ csrfToken });
 };
 
 export const logout = async (_req: Request, res: Response): Promise<void> => {
   clearSessionCookie(res);
-  clearCsrfCookie(res);
   res.status(204).send();
 };
