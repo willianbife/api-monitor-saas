@@ -60,10 +60,6 @@ export const Dashboard: React.FC = () => {
     try {
       const response = await api.get("/endpoints", {
         params: { _ts: Date.now() },
-        headers: {
-          "Cache-Control": "no-store",
-          Pragma: "no-cache",
-        },
       });
       setEndpoints(response.data.endpoints);
       setMonitoringStatus(response.data.monitoring ?? null);
@@ -81,10 +77,6 @@ export const Dashboard: React.FC = () => {
     void api
       .get("/endpoints", {
         params: { _ts: Date.now() },
-        headers: {
-          "Cache-Control": "no-store",
-          Pragma: "no-cache",
-        },
       })
       .then((response) => {
         if (!mounted) return;
